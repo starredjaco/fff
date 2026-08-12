@@ -320,11 +320,7 @@ export default function fffExtension(pi: ExtensionAPI) {
     undefined;
 
   // flag (boolean) > env ("1"/"true", or "0"/"false") > default.
-  function resolveBoolOpt(
-    flagName: string,
-    envName: string,
-    fallback = false,
-  ): boolean {
+  function resolveBoolOpt(flagName: string, envName: string, fallback = false): boolean {
     const flag = pi.getFlag(flagName);
     if (typeof flag === "boolean") return flag;
     if (typeof flag === "string") return flag === "true" || flag === "1";
