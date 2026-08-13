@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard, Weak};
 use std::time::{Duration, Instant};
 
+use crate::dbs::env_pool;
 use crate::dbs::lmdb::{LmdbStore, spawn_lmdb_gc};
 use crate::error::Error;
 use crate::file_picker::FilePicker;
@@ -493,7 +494,8 @@ impl<T: LmdbStore> SharedDb<T> {
     ///
     /// Acquires the write lock, ensuring all readers (including any active mmap
     /// access) are finished before the LMDB environment is closed and the files
-    /// are removed.
+    /// are removed. Refuses with [`Error::DbInUse`] while other trackers in this
+    /// process still share the pooled env, leaving this handle intact.
     ///
     /// Returns `Ok(Some(path))` with the deleted path, or `Ok(None)` if no tracker was initialized.
     pub fn destroy(&self) -> Result<Option<PathBuf>, Error> {
@@ -501,10 +503,21 @@ impl<T: LmdbStore> SharedDb<T> {
         let Some(tracker) = guard.take() else {
             return Ok(None);
         };
+        let closing = match env_pool::begin_exclusive_destroy(tracker.shared_env()) {
+            Ok(closing) => closing,
+            Err(e) => {
+                *guard = Some(tracker);
+                return Err(e);
+            }
+        };
         let db_path = tracker.env().path().to_path_buf();
         // Drop closes the LMDB env and unmaps the files
         drop(tracker);
         drop(guard);
+        // Deleting before mdb_env_close finishes would race the unmap.
+        if let Some(event) = closing {
+            event.wait_timeout(Duration::from_secs(5));
+        }
         std::fs::remove_dir_all(&db_path).map_err(|source| Error::RemoveDbDir {
             path: db_path.clone(),
             source,

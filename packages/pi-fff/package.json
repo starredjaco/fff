@@ -37,6 +37,7 @@
   },
   "scripts": {
     "test": "bun test test/",
+    "test:native": "bun test test-native/",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

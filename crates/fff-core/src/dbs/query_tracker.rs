@@ -1,4 +1,5 @@
 use super::db_healthcheck::DbHealthChecker;
+use super::env_pool::SharedEnv;
 use super::lmdb::{DbHealth, LmdbStore, is_map_full};
 use crate::error::Error;
 use heed::types::{Bytes, SerdeBincode};
@@ -27,7 +28,7 @@ struct HistoryEntry {
 
 #[derive(Debug)]
 pub struct QueryTracker {
-    env: Env,
+    env: SharedEnv,
     // Database for (project_path, query) -> QueryMatchEntry mappings
     query_file_db: Database<Bytes, SerdeBincode<QueryMatchEntry>>,
     // Database for project_path -> VecDeque<HistoryEntry> mappings (file picker)
@@ -92,7 +93,7 @@ impl LmdbStore for QueryTracker {
     const MAX_DBS: u32 = 16;
     const SIZE_CAP_BYTES: u64 = 8 * 1024 * 1024;
 
-    fn env(&self) -> &Env {
+    fn shared_env(&self) -> &SharedEnv {
         &self.env
     }
 
